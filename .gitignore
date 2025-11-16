@@ -46,3 +46,7 @@ htmlcov/
 
 # Logs
 *.log
+
+# Node.js (should not be in backend, but just in case)
+node_modules/
+package-lock.json
