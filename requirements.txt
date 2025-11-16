@@ -1,0 +1,36 @@
+# FastAPI Core
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+sqlalchemy
+alembic
+psycopg2-binary
+
+# Authentication & Security
+python-jose[cryptography]
+passlib[argon2]
+python-dotenv
+pydantic[email]
+pydantic-settings
+argon2_cffi
+
+# CORS & Rate Limiting
+slowapi
+python-multipart
+
+# Payments
+stripe==7.11.0
+
+# Redis (Optional for caching)
+redis==5.0.1
+hiredis
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+
+# Additional utilities
+email-validator
