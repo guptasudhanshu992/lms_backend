@@ -17,7 +17,7 @@ from .models.log import Log  # Import Log model
 from .models.api_analytics import APIAnalytics  # Import APIAnalytics model
 from .core.logger import app_logger, api_logger, log_error
 from .core.analytics_middleware import AnalyticsMiddleware
-from .api import auth, users, courses, enrollments, payments, admin, blogs, scorm, curriculum, cart_wishlist, coupons, logs, analytics, sitemap
+from .api import auth, users, courses, enrollments, payments, admin, blogs, scorm, curriculum, cart_wishlist, coupons, logs, analytics, sitemap, branding
 
 
 def create_admin_user():
@@ -153,6 +153,7 @@ app.include_router(coupons.router)
 app.include_router(logs.router, prefix="/api", tags=["logs"])
 app.include_router(analytics.router, prefix="/api", tags=["analytics"])
 app.include_router(sitemap.router, prefix="/api", tags=["seo"])
+app.include_router(branding.router)
 
 
 if __name__ == "__main__":
