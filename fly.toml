@@ -5,11 +5,7 @@ app = "lms-backend"
 primary_region = "sea"  # Change to your preferred region (e.g., iad, lhr, sin)
 
 [build]
-  # Option 1: Use buildpacks (no Dockerfile needed)
   builder = "paketobuildpacks/builder:base"
-  
-  # Option 2: Use Dockerfile (more control)
-  # dockerfile = "Dockerfile"
 
 [env]
   # Environment-specific variables
