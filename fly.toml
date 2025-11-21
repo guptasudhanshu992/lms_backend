@@ -1,59 +1,46 @@
-# fly.toml app configuration file generated for lms-backend
+# fly.toml app configuration file generated for lms-backend-fbhhiw-frosty-fog-9921 on 2025-11-21T10:41:19+05:30
+#
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "lms-backend-fbhhiw"
-primary_region = "bom"
+app = 'lms-backend-fbhhiw-frosty-fog-9921'
+primary_region = 'bom'
 
 [build]
-  builder = "paketobuildpacks/builder:base"
+  builder = 'paketobuildpacks/builder:base'
 
 [env]
-  # Environment-specific variables
-  PORT = "8000"
-  ENVIRONMENT = "production"
-  
-  # Python optimizations
-  PYTHONUNBUFFERED = "1"
-  PYTHONDONTWRITEBYTECODE = "1"
+  ENVIRONMENT = 'production'
+  PORT = '8000'
+  PYTHONDONTWRITEBYTECODE = '1'
+  PYTHONUNBUFFERED = '1'
+
+[[mounts]]
+  source = 'lms_data'
+  destination = '/app/data'
+  initial_size = '1gb'
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
   [http_service.concurrency]
-    type = "requests"
+    type = 'requests'
     hard_limit = 200
     soft_limit = 150
 
   [[http_service.checks]]
-    grace_period = "10s"
-    interval = "30s"
-    method = "GET"
-    timeout = "5s"
-    path = "/health"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
-  cpu_kind = "shared"
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
-  memory = "1gb"
-  memory_mb = 1024
-
-# Persistent storage for uploads, database, logs
-[[mounts]]
-  source = "lms_data"
-  destination = "/app/data"
-  initial_size = "1gb"
-
-# Environment secrets (set via: fly secrets set KEY=VALUE)
-# fly secrets set SECRET_KEY=your-secret-key
-# fly secrets set DATABASE_URL=your-database-url
-# fly secrets set ADMIN_PASSWORD=your-admin-password
-# fly secrets set SMTP_USER=your-email
-# fly secrets set SMTP_PASSWORD=your-password
-# fly secrets set STRIPE_SECRET_KEY=your-stripe-key
-# fly secrets set STRIPE_WEBHOOK_SECRET=your-webhook-secret
-# fly secrets set CLOUDFLARE_API_TOKEN=your-cf-token (if using Cloudflare Stream)
