@@ -1,0 +1,96 @@
+# fly.toml app configuration file generated for lms-backend
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "lms-backend"
+primary_region = "sea"  # Change to your preferred region (e.g., iad, lhr, sin)
+
+[build]
+  # Option 1: Use buildpacks (no Dockerfile needed)
+  builder = "paketobuildpacks/builder:base"
+  
+  # Option 2: Use Dockerfile (more control)
+  # dockerfile = "Dockerfile"
+
+[env]
+  # Environment-specific variables
+  PORT = "8000"
+  ENVIRONMENT = "production"
+  
+  # Python optimizations
+  PYTHONUNBUFFERED = "1"
+  PYTHONDONTWRITEBYTECODE = "1"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0  # Scale to zero when idle
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 150
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8000
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+  [[services.tcp_checks]]
+    grace_period = "10s"
+    interval = "15s"
+    restart_limit = 0
+    timeout = "2s"
+
+  [[services.http_checks]]
+    interval = "30s"
+    grace_period = "10s"
+    method = "get"
+    path = "/health"
+    protocol = "http"
+    timeout = "5s"
+    tls_skip_verify = false
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512  # Start small, can increase if needed
+
+# Persistent storage for uploads, database, logs
+[[mounts]]
+  source = "lms_data"
+  destination = "/app/data"
+  initial_size = "1gb"
+
+# Environment secrets (set via: fly secrets set KEY=VALUE)
+# fly secrets set SECRET_KEY=your-secret-key
+# fly secrets set DATABASE_URL=your-database-url
+# fly secrets set ADMIN_PASSWORD=your-admin-password
+# fly secrets set SMTP_USER=your-email
+# fly secrets set SMTP_PASSWORD=your-password
+# fly secrets set STRIPE_SECRET_KEY=your-stripe-key
+# fly secrets set STRIPE_WEBHOOK_SECRET=your-webhook-secret
+# fly secrets set CLOUDFLARE_API_TOKEN=your-cf-token (if using Cloudflare Stream)

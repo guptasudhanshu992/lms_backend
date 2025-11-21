@@ -85,6 +85,13 @@ class Lesson(Base):
     content = Column(Text, nullable=True)  # HTML/Markdown content for text lessons
     file_url = Column(String(500), nullable=True)  # For downloadable files
     
+    # Cloudflare Stream Integration
+    cloudflare_stream_id = Column(String(255), nullable=True)  # Cloudflare Stream video UID
+    cloudflare_video_uid = Column(String(255), nullable=True)  # Alternative UID field
+    video_status = Column(String(50), nullable=True)  # ready, encoding, error
+    thumbnail_url = Column(String(500), nullable=True)  # Video thumbnail
+    video_duration_seconds = Column(Integer, nullable=True)  # Actual video duration from Stream
+    
     duration = Column(Integer, nullable=True)  # Duration in seconds
     order = Column(Integer, default=0)
     is_preview = Column(Boolean, default=False)  # Can be viewed without enrollment

@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Optional
+import os
+import shutil
+from pathlib import Path
+import uuid
 
 from ..core.database import get_db
 from ..core.security import get_current_admin_user
@@ -14,19 +18,22 @@ from ..schemas.branding import (
 
 router = APIRouter(prefix="/api/branding", tags=["branding"])
 
+# Ensure uploads directory exists
+UPLOAD_DIR = Path("uploads/branding")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 @router.get("/settings", response_model=BrandingSettingsResponse)
 async def get_branding_settings(db: Session = Depends(get_db)):
     """
     Get current branding settings (public endpoint).
-    Returns default settings if none exist.
+    Returns default settings if none exist, creating them in the database.
     """
     settings = db.query(BrandingSettings).first()
     
     if not settings:
-        # Return default settings
+        # Create default settings in database
         settings = BrandingSettings(
-            id=1,
             logo_url=None,
             favicon_url=None,
             primary_color="#3182CE",
@@ -37,6 +44,9 @@ async def get_branding_settings(db: Session = Depends(get_db)):
             home_hero_cta_link="/courses",
             about_hero_title="About Us"
         )
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
     
     return settings
 
@@ -108,3 +118,112 @@ async def reset_branding_settings(
         db.commit()
     
     return {"message": "Branding settings reset to defaults"}
+
+
+@router.post("/upload/logo")
+async def upload_logo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """
+    Upload logo image (admin only).
+    """
+    # Validate file type
+    allowed_types = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}"
+        )
+    
+    # Generate unique filename
+    file_extension = file.filename.split(".")[-1]
+    unique_filename = f"logo_{uuid.uuid4().hex}.{file_extension}"
+    file_path = UPLOAD_DIR / unique_filename
+    
+    # Save file
+    with file_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Update settings
+    settings = db.query(BrandingSettings).first()
+    if not settings:
+        settings = BrandingSettings()
+        db.add(settings)
+    
+    # Store relative path for URL
+    settings.logo_url = f"/uploads/branding/{unique_filename}"
+    db.commit()
+    db.refresh(settings)
+    
+    return {"url": settings.logo_url, "message": "Logo uploaded successfully"}
+
+
+@router.post("/upload/favicon")
+async def upload_favicon(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """
+    Upload favicon image (admin only).
+    """
+    # Validate file type
+    allowed_types = ["image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/ico", "image/svg+xml"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed types: ICO, PNG, SVG"
+        )
+    
+    # Generate unique filename
+    file_extension = file.filename.split(".")[-1] if "." in file.filename else "ico"
+    unique_filename = f"favicon_{uuid.uuid4().hex}.{file_extension}"
+    file_path = UPLOAD_DIR / unique_filename
+    
+    # Save file
+    with file_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Update settings
+    settings = db.query(BrandingSettings).first()
+    if not settings:
+        settings = BrandingSettings()
+        db.add(settings)
+    
+    settings.favicon_url = f"/uploads/branding/{unique_filename}"
+    db.commit()
+    db.refresh(settings)
+    
+    return {"url": settings.favicon_url, "message": "Favicon uploaded successfully"}
+
+
+@router.post("/upload/image")
+async def upload_image(
+    file: UploadFile = File(...),
+    image_type: str = "general",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """
+    Upload general image (hero images, team photos, etc.) - admin only.
+    """
+    # Validate file type
+    allowed_types = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}"
+        )
+    
+    # Generate unique filename
+    file_extension = file.filename.split(".")[-1]
+    unique_filename = f"{image_type}_{uuid.uuid4().hex}.{file_extension}"
+    file_path = UPLOAD_DIR / unique_filename
+    
+    # Save file
+    with file_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    return {"url": f"/uploads/branding/{unique_filename}", "message": "Image uploaded successfully"}

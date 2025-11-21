@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
     
+    # Cloudflare
+    CLOUDFLARE_ACCOUNT_ID: str = ""
+    CLOUDFLARE_API_TOKEN: str = ""
+    CLOUDFLARE_R2_ACCESS_KEY_ID: str = ""
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: str = ""
+    CLOUDFLARE_R2_BUCKET_NAME: str = "lms-videos"
+    CLOUDFLARE_R2_ENDPOINT: str = ""  # e.g., https://ACCOUNT_ID.r2.cloudflarestorage.com
+    CLOUDFLARE_STREAM_WEBHOOK_SECRET: str = ""
+    
     # Admin User
     ADMIN_EMAIL: str = "admin@lms.com"
     ADMIN_PASSWORD: str = "Admin@123456"

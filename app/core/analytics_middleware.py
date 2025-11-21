@@ -22,25 +22,20 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Skip analytics for certain paths
-        skip_paths = ["/docs", "/redoc", "/openapi.json", "/static", "/favicon.ico"]
+        skip_paths = ["/docs", "/redoc", "/openapi.json", "/static", "/favicon.ico", "/uploads"]
         if any(request.url.path.startswith(path) for path in skip_paths):
             return await call_next(request)
         
         # Record start time
         start_time = time.time()
         
-        # Get request details
+        # Get request details (fast, synchronous operations only)
         method = request.method
         endpoint = request.url.path
         user_agent = request.headers.get("user-agent")
         ip_address = request.client.host if request.client else None
         
-        # Get geolocation data from IP address
-        geo_data = None
-        if ip_address:
-            geo_data = get_geolocation_from_ip(ip_address)
-        
-        # Try to get user ID from token
+        # Try to get user ID from token (fast operation)
         user_id = None
         try:
             auth_header = request.headers.get("authorization")
@@ -59,7 +54,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 pass
         
-        # Process request
+        # Process request (this is the main request handling)
         response = None
         error_message = None
         status_code = 500
@@ -70,8 +65,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             error_message = str(e)
             logger.error(f"Error processing request {method} {endpoint}: {e}")
-            # Re-raise to let FastAPI handle it
-            raise
+            raise  # Re-raise to let FastAPI handle it
         finally:
             # Calculate response time
             end_time = time.time()
@@ -85,22 +79,25 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
                 except ValueError:
                     pass
             
-            # Store analytics asynchronously
-            asyncio.create_task(
-                self._store_analytics(
-                    endpoint=endpoint,
-                    method=method,
-                    status_code=status_code,
-                    response_time_ms=response_time_ms,
-                    user_id=user_id,
-                    ip_address=ip_address,
-                    geo_data=geo_data,
-                    user_agent=user_agent,
-                    request_size=request_size,
-                    response_size=response_size,
-                    error_message=error_message
+            # Store analytics asynchronously (fire-and-forget, doesn't block response)
+            try:
+                asyncio.create_task(
+                    self._store_analytics(
+                        endpoint=endpoint,
+                        method=method,
+                        status_code=status_code,
+                        response_time_ms=response_time_ms,
+                        user_id=user_id,
+                        ip_address=ip_address,
+                        user_agent=user_agent,
+                        request_size=request_size,
+                        response_size=response_size,
+                        error_message=error_message
+                    )
                 )
-            )
+            except Exception as e:
+                # Never let analytics errors affect the response
+                logger.error(f"Failed to create analytics task: {e}")
         
         return response
     
@@ -112,15 +109,19 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         response_time_ms: float,
         user_id: int = None,
         ip_address: str = None,
-        geo_data: dict = None,
         user_agent: str = None,
         request_size: int = None,
         response_size: int = None,
         error_message: str = None
     ):
-        """Store analytics data in database"""
+        """Store analytics data in database (runs asynchronously, doesn't block requests)"""
         db = SessionLocal()
         try:
+            # Get geolocation data here (after response is sent)
+            geo_data = None
+            if ip_address:
+                geo_data = get_geolocation_from_ip(ip_address)
+            
             analytics = APIAnalytics(
                 endpoint=endpoint,
                 method=method,

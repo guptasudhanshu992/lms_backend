@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Any, Optional, List
@@ -14,6 +14,10 @@ from ..schemas.course import (
     CourseCreate, CourseUpdate, CourseResponse, CourseDetailResponse,
     CourseListResponse, LessonCreate, LessonUpdate, LessonResponse
 )
+from ..services.cloudflare import cloudflare_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -249,8 +253,154 @@ async def delete_lesson(
             detail="Lesson not found"
         )
     
+    # Delete video from Cloudflare Stream if exists
+    if lesson.cloudflare_stream_id:
+        try:
+            await cloudflare_service.delete_video_from_stream(lesson.cloudflare_stream_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete video from Stream: {str(e)}")
+    
     db.delete(lesson)
     db.commit()
+
+
+@router.post("/lessons/{lesson_id}/upload-video", response_model=LessonResponse)
+async def upload_lesson_video(
+    lesson_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Upload video for a lesson to Cloudflare Stream (Admin only).
+    Supports MP4, MOV, AVI, WebM formats up to 5GB.
+    """
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lesson not found"
+        )
+    
+    # Validate file type
+    allowed_types = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm", "video/avi"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed: {', '.join(allowed_types)}"
+        )
+    
+    # Validate file size (5GB max)
+    max_size = 5 * 1024 * 1024 * 1024  # 5GB in bytes
+    file_content = await file.read()
+    if len(file_content) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds 5GB limit"
+        )
+    
+    try:
+        # Delete old video from Stream if exists
+        if lesson.cloudflare_stream_id:
+            try:
+                await cloudflare_service.delete_video_from_stream(lesson.cloudflare_stream_id)
+            except Exception as e:
+                logger.warning(f"Failed to delete old video: {str(e)}")
+        
+        # Upload to Cloudflare Stream
+        upload_result = await cloudflare_service.upload_video_to_stream(
+            file_content=file_content,
+            filename=file.filename,
+            metadata={
+                "name": lesson.title,
+                "lesson_id": str(lesson_id),
+                "course_id": str(lesson.course_id)
+            }
+        )
+        
+        # Update lesson with Cloudflare Stream details
+        lesson.cloudflare_stream_id = upload_result["uid"]
+        lesson.cloudflare_video_uid = upload_result["uid"]
+        lesson.video_status = upload_result["status"]
+        lesson.thumbnail_url = upload_result.get("thumbnail")
+        lesson.video_url = upload_result.get("preview")
+        lesson.lesson_type = "video"
+        
+        # Optionally upload to R2 as backup
+        try:
+            r2_url = cloudflare_service.upload_to_r2(
+                file_content=file_content,
+                filename=file.filename
+            )
+            if r2_url:
+                logger.info(f"Video backed up to R2: {r2_url}")
+        except Exception as e:
+            logger.warning(f"Failed to backup to R2: {str(e)}")
+        
+        db.commit()
+        db.refresh(lesson)
+        
+        api_logger.info(f"Video uploaded for lesson {lesson_id} by admin {current_user.id}")
+        
+        return lesson
+        
+    except Exception as e:
+        logger.error(f"Error uploading video: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload video: {str(e)}"
+        )
+
+
+@router.get("/lessons/{lesson_id}/video-status", response_model=dict)
+async def get_lesson_video_status(
+    lesson_id: int,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Get video encoding status from Cloudflare Stream (Admin only).
+    """
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lesson not found"
+        )
+    
+    if not lesson.cloudflare_stream_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No video uploaded for this lesson"
+        )
+    
+    try:
+        video_details = await cloudflare_service.get_video_details(lesson.cloudflare_stream_id)
+        
+        # Update lesson if video is ready and duration is available
+        if video_details["status"] == "ready":
+            lesson.video_status = "ready"
+            if video_details.get("duration"):
+                lesson.video_duration_seconds = int(video_details["duration"])
+            if video_details.get("thumbnail"):
+                lesson.thumbnail_url = video_details["thumbnail"]
+            db.commit()
+        
+        return {
+            "status": video_details["status"],
+            "duration": video_details.get("duration"),
+            "thumbnail": video_details.get("thumbnail"),
+            "uid": video_details["uid"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting video status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get video status: {str(e)}"
+        )
 
 
 @router.get("/{course_id}/check-access")

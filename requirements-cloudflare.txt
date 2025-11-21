@@ -1,0 +1,11 @@
+# Additional Python packages required for Cloudflare integration
+# Add these to your existing requirements.txt
+
+# Async HTTP client for Cloudflare API
+httpx>=0.24.0
+
+# AWS SDK for Python (used for R2 S3-compatible storage)
+boto3>=1.28.0
+
+# Additional optional dependencies
+botocore>=1.31.0  # AWS core library (installed with boto3)

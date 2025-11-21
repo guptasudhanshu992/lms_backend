@@ -7,6 +7,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from contextlib import asynccontextmanager
 from pathlib import Path
+import time
 
 from .core.config import settings
 from .core.database import engine, Base, SessionLocal
@@ -93,24 +94,29 @@ UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Request logging middleware
+# Request logging middleware (lightweight, async-friendly)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    import time
     start_time = time.time()
     
-    # Log request
-    api_logger.info(f"Request: {request.method} {request.url.path}")
+    # Log request (non-blocking)
+    api_logger.info(f"→ {request.method} {request.url.path}")
     
-    response = await call_next(request)
-    
-    # Log response
-    duration = time.time() - start_time
-    api_logger.info(
-        f"Response: {request.method} {request.url.path} - {response.status_code} ({duration:.3f}s)"
-    )
-    
-    return response
+    try:
+        response = await call_next(request)
+        
+        # Log response (non-blocking)
+        duration = time.time() - start_time
+        api_logger.info(
+            f"← {request.method} {request.url.path} - {response.status_code} ({duration:.3f}s)"
+        )
+        
+        return response
+    except Exception as e:
+        # Log error (non-blocking)
+        duration = time.time() - start_time
+        api_logger.error(f"✗ {request.method} {request.url.path} - Error: {str(e)} ({duration:.3f}s)")
+        raise
 
 
 # Exception handlers

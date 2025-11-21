@@ -64,6 +64,13 @@ class LessonBase(BaseModel):
     is_preview: bool = False
     is_scorm: bool = False
     sco_id: Optional[int] = None
+    
+    # Cloudflare Stream fields
+    cloudflare_stream_id: Optional[str] = None
+    cloudflare_video_uid: Optional[str] = None
+    video_status: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    video_duration_seconds: Optional[int] = None
 
 
 class LessonCreate(LessonBase):
@@ -83,6 +90,13 @@ class LessonUpdate(BaseModel):
     is_scorm: Optional[bool] = None
     sco_id: Optional[int] = None
     section_id: Optional[int] = None
+    
+    # Cloudflare Stream fields
+    cloudflare_stream_id: Optional[str] = None
+    cloudflare_video_uid: Optional[str] = None
+    video_status: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    video_duration_seconds: Optional[int] = None
 
 
 class LessonResponse(LessonBase):
